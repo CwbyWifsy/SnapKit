@@ -13,7 +13,6 @@ QMainWindow, QWidget {
 QListWidget#sidebar {
     background-color: #252526;
     border: none;
-    border-right: 1px solid #3c3c3c;
     padding: 8px 4px;
     min-width: 120px;
     max-width: 140px;
@@ -67,6 +66,10 @@ QTableWidget, QTableView {
 QTableWidget::item, QTableView::item {
     padding: 8px;
     border: none;
+}
+
+QTableWidget::item:hover, QTableView::item:hover {
+    background-color: #2d2d2d;
 }
 
 QTableWidget::item:selected, QTableView::item:selected {
@@ -222,9 +225,15 @@ QMessageBox QLabel {
     color: #cccccc;
 }
 
-/* 分隔器 */
+/* 分隔器 - 修复空白问题 */
+QSplitter {
+    background-color: #1e1e1e;
+}
+
 QSplitter::handle {
     background-color: #3c3c3c;
+    width: 1px;
+    height: 1px;
 }
 
 QSplitter::handle:horizontal {
@@ -242,5 +251,31 @@ QToolTip {
     border: 1px solid #5a5a5a;
     border-radius: 4px;
     padding: 4px 8px;
+}
+
+/* 卡片视图样式 */
+QListWidget#cardView {
+    background-color: #1e1e1e;
+    border: none;
+    padding: 8px;
+}
+
+QListWidget#cardView::item {
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px;
+    min-height: 80px;
+}
+
+QListWidget#cardView::item:hover {
+    background-color: #2d2d2d;
+    border: 1px solid #0078d4;
+}
+
+QListWidget#cardView::item:selected {
+    background-color: #0078d4;
+    border: 1px solid #0078d4;
 }
 """

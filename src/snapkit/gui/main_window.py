@@ -137,7 +137,7 @@ class AddResourceDialog(QDialog):
         layout.addRow("名称:", self.name_edit)
 
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["file", "folder", "url"])
+        self.type_combo.addItems(["video", "image", "url", "document", "archive", "folder"])
         layout.addRow("类型:", self.type_combo)
 
         self.path_edit = QLineEdit()
@@ -191,10 +191,10 @@ class MainWindow(QMainWindow):
 
         # 添加导航项
         nav_items = [
-            ("📦 已安装", 0),
-            ("⭐ 收藏", 1),
-            ("📋 待装", 2),
-            ("📁 资源", 3),
+            ("🖥️ 本地扫描", 0),
+            ("✅ 已安装", 1),
+            ("📥 未安装", 2),
+            ("📁 资源库", 3),
         ]
         for text, idx in nav_items:
             item = QListWidgetItem(text)
@@ -206,8 +206,8 @@ class MainWindow(QMainWindow):
 
         # 内容区域
         self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_local_tab())
         self._stack.addWidget(self._build_installed_tab())
-        self._stack.addWidget(self._build_pinned_tab())
         self._stack.addWidget(self._build_notinstalled_tab())
         self._stack.addWidget(self._build_resources_tab())
 
@@ -225,74 +225,84 @@ class MainWindow(QMainWindow):
     def _session(self):
         return get_session(self._engine)
 
-    # ── Installed Apps tab ────────────────────────────────────────────
+    # ── Local Scan tab (本地扫描) ────────────────────────────────────
 
-    def _build_installed_tab(self) -> QWidget:
+    def _build_local_tab(self) -> QWidget:
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        self._installed_search = QLineEdit()
-        self._installed_search.setPlaceholderText("搜索已安装应用...")
-        self._installed_search.textChanged.connect(self._refresh_installed)
-        layout.addWidget(self._installed_search)
+        self._local_search = QLineEdit()
+        self._local_search.setPlaceholderText("搜索本地扫描的应用...")
+        self._local_search.textChanged.connect(self._refresh_local)
+        layout.addWidget(self._local_search)
 
-        self._installed_table = QTableWidget()
-        self._installed_table.setColumnCount(5)
-        self._installed_table.setHorizontalHeaderLabels(["", "名称", "发布者", "版本", "标签"])
-        self._installed_table.setColumnWidth(0, 40)  # 图标列
-        self._installed_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._installed_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._installed_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._installed_table.setAlternatingRowColors(True)
-        self._installed_table.verticalHeader().setVisible(False)
-        layout.addWidget(self._installed_table)
+        self._local_table = QTableWidget()
+        self._local_table.setColumnCount(5)
+        self._local_table.setHorizontalHeaderLabels(["", "名称", "发布者", "版本", "标签"])
+        self._local_table.setColumnWidth(0, 40)
+        self._local_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._local_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._local_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._local_table.setAlternatingRowColors(True)
+        self._local_table.verticalHeader().setVisible(False)
+        layout.addWidget(self._local_table)
 
         btns = QHBoxLayout()
-        add_btn = QPushButton("添加")
-        add_btn.clicked.connect(self._on_add_installed)
-        scan_btn = QPushButton("扫描 (Mock)")
-        scan_btn.setProperty("secondary", True)
-        scan_btn.clicked.connect(self._on_scan_mock)
-        pin_btn = QPushButton("收藏选中")
-        pin_btn.setProperty("secondary", True)
-        pin_btn.clicked.connect(self._on_pin_selected)
-        btns.addWidget(add_btn)
-        btns.addWidget(scan_btn)
-        btns.addWidget(pin_btn)
+        add_fav_btn = QPushButton("添加到收藏")
+        add_fav_btn.clicked.connect(self._on_add_to_favorites)
+        add_manual_btn = QPushButton("手动添加")
+        add_manual_btn.setProperty("secondary", True)
+        add_manual_btn.clicked.connect(self._on_add_local_manual)
+        btns.addWidget(add_fav_btn)
+        btns.addWidget(add_manual_btn)
         btns.addStretch()
         layout.addLayout(btns)
         return w
 
-    def _refresh_installed(self):
+    def _refresh_local(self):
         session = self._session()
         query = session.query(InstalledApp)
-        search = self._installed_search.text().strip()
+        search = self._local_search.text().strip()
         if search:
             query = query.filter(InstalledApp.name.ilike(f"%{search}%"))
         apps = query.order_by(InstalledApp.name).all()
 
-        self._installed_table.setRowCount(len(apps))
+        self._local_table.setRowCount(len(apps))
         for i, a in enumerate(apps):
-            # 图标列
             icon_item = QTableWidgetItem()
             icon = extract_icon(a.install_location)
             icon_item.setIcon(icon)
-            icon_item.setData(Qt.UserRole, a.id)  # 存储 ID
-            self._installed_table.setItem(i, 0, icon_item)
+            icon_item.setData(Qt.UserRole, a.id)
+            self._local_table.setItem(i, 0, icon_item)
 
-            self._installed_table.setItem(i, 1, QTableWidgetItem(a.name))
-            self._installed_table.setItem(i, 2, QTableWidgetItem(a.publisher or ""))
-            self._installed_table.setItem(i, 3, QTableWidgetItem(a.version or ""))
-            self._installed_table.setItem(i, 4, QTableWidgetItem(a.tags or ""))
-
-        self._installed_table.setRowHeight(0, 36)
-        for i in range(len(apps)):
-            self._installed_table.setRowHeight(i, 36)
+            self._local_table.setItem(i, 1, QTableWidgetItem(a.name))
+            self._local_table.setItem(i, 2, QTableWidgetItem(a.publisher or ""))
+            self._local_table.setItem(i, 3, QTableWidgetItem(a.version or ""))
+            self._local_table.setItem(i, 4, QTableWidgetItem(a.tags or ""))
+            self._local_table.setRowHeight(i, 36)
         session.close()
 
-    def _on_add_installed(self):
+    def _on_add_to_favorites(self):
+        row = self._local_table.currentRow()
+        if row < 0:
+            return
+        app_id = self._local_table.item(row, 0).data(Qt.UserRole)
+        session = self._session()
+        existing = session.query(PinnedApp).filter_by(installed_app_id=app_id).first()
+        if existing:
+            QMessageBox.warning(self, "添加收藏", "该应用已在收藏列表中。")
+            session.close()
+            return
+        session.add(PinnedApp(installed_app_id=app_id))
+        session.commit()
+        session.close()
+        self._refresh_installed()
+        QMessageBox.information(self, "添加收藏", "已添加到收藏列表。")
+
+    def _on_add_local_manual(self):
+        """手动添加本地应用."""
         dialog = AddInstalledAppDialog(self)
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_data()
@@ -304,113 +314,86 @@ class MainWindow(QMainWindow):
             session.add(app)
             session.commit()
             session.close()
-            self._refresh_installed()
+            self._refresh_local()
 
-    def _on_scan_mock(self):
-        from snapkit.scanner import load_mock_data, save_scanned_apps
+    # ── Installed Apps tab (已安装 - 收藏列表中已安装的) ──────────────
 
-        session = self._session()
-        apps = load_mock_data()
-        added = save_scanned_apps(session, apps)
-        session.close()
-        self._refresh_installed()
-        QMessageBox.information(self, "扫描完成", f"发现 {len(apps)} 个应用，新增 {added} 个。")
-
-    def _on_pin_selected(self):
-        row = self._installed_table.currentRow()
-        if row < 0:
-            return
-        app_id = self._installed_table.item(row, 0).data(Qt.UserRole)
-        session = self._session()
-        existing = session.query(PinnedApp).filter_by(installed_app_id=app_id).first()
-        if existing:
-            QMessageBox.warning(self, "收藏", "该应用已收藏。")
-            session.close()
-            return
-        session.add(PinnedApp(installed_app_id=app_id))
-        session.commit()
-        session.close()
-        self._refresh_pinned()
-        QMessageBox.information(self, "收藏", "已添加到收藏。")
-
-    # ── Pinned Apps tab ───────────────────────────────────────────────
-
-    def _build_pinned_tab(self) -> QWidget:
+    def _build_installed_tab(self) -> QWidget:
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        self._pinned_search = QLineEdit()
-        self._pinned_search.setPlaceholderText("搜索收藏应用...")
-        self._pinned_search.textChanged.connect(self._refresh_pinned)
-        layout.addWidget(self._pinned_search)
+        self._installed_search = QLineEdit()
+        self._installed_search.setPlaceholderText("搜索已安装的收藏应用...")
+        self._installed_search.textChanged.connect(self._refresh_installed)
+        layout.addWidget(self._installed_search)
 
-        self._pinned_table = QTableWidget()
-        self._pinned_table.setColumnCount(4)
-        self._pinned_table.setHorizontalHeaderLabels(["", "应用名称", "启动命令", "标签"])
-        self._pinned_table.setColumnWidth(0, 40)
-        self._pinned_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._pinned_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._pinned_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._pinned_table.setAlternatingRowColors(True)
-        self._pinned_table.verticalHeader().setVisible(False)
-        layout.addWidget(self._pinned_table)
+        self._installed_table = QTableWidget()
+        self._installed_table.setColumnCount(4)
+        self._installed_table.setHorizontalHeaderLabels(["", "应用名称", "启动命令", "标签"])
+        self._installed_table.setColumnWidth(0, 40)
+        self._installed_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._installed_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._installed_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._installed_table.setAlternatingRowColors(True)
+        self._installed_table.verticalHeader().setVisible(False)
+        layout.addWidget(self._installed_table)
 
         btns = QHBoxLayout()
         launch_btn = QPushButton("启动")
         launch_btn.clicked.connect(self._on_launch)
-        unpin_btn = QPushButton("取消收藏")
-        unpin_btn.setProperty("secondary", True)
-        unpin_btn.clicked.connect(self._on_unpin)
+        remove_btn = QPushButton("移出收藏")
+        remove_btn.setProperty("secondary", True)
+        remove_btn.clicked.connect(self._on_remove_from_favorites)
         btns.addWidget(launch_btn)
-        btns.addWidget(unpin_btn)
+        btns.addWidget(remove_btn)
         btns.addStretch()
         layout.addLayout(btns)
         return w
 
-    def _refresh_pinned(self):
+    def _refresh_installed(self):
         session = self._session()
         pins = session.query(PinnedApp).all()
-        search = self._pinned_search.text().strip().lower()
+        search = self._installed_search.text().strip().lower()
         if search:
             pins = [p for p in pins if search in p.installed_app.name.lower()]
 
-        self._pinned_table.setRowCount(len(pins))
+        self._installed_table.setRowCount(len(pins))
         for i, p in enumerate(pins):
-            # 图标列
             icon_item = QTableWidgetItem()
             icon = extract_icon(p.installed_app.install_location)
             icon_item.setIcon(icon)
             icon_item.setData(Qt.UserRole, p.id)
-            self._pinned_table.setItem(i, 0, icon_item)
+            self._installed_table.setItem(i, 0, icon_item)
 
-            self._pinned_table.setItem(i, 1, QTableWidgetItem(p.installed_app.name))
-            self._pinned_table.setItem(i, 2, QTableWidgetItem(p.launch_command or "(自动)"))
-            self._pinned_table.setItem(i, 3, QTableWidgetItem(p.tags or ""))
-            self._pinned_table.setRowHeight(i, 36)
+            self._installed_table.setItem(i, 1, QTableWidgetItem(p.installed_app.name))
+            self._installed_table.setItem(i, 2, QTableWidgetItem(p.launch_command or "(自动)"))
+            self._installed_table.setItem(i, 3, QTableWidgetItem(p.tags or ""))
+            self._installed_table.setRowHeight(i, 36)
         session.close()
 
-    def _on_unpin(self):
-        row = self._pinned_table.currentRow()
+    def _on_remove_from_favorites(self):
+        row = self._installed_table.currentRow()
         if row < 0:
             return
-        pin_id = self._pinned_table.item(row, 0).data(Qt.UserRole)
+        pin_id = self._installed_table.item(row, 0).data(Qt.UserRole)
         session = self._session()
         entry = session.get(PinnedApp, pin_id)
         if entry:
             session.delete(entry)
             session.commit()
         session.close()
-        self._refresh_pinned()
+        self._refresh_installed()
+        self._refresh_notinstalled()
 
     def _on_launch(self):
         from snapkit.launcher import infer_exe, launch_app
 
-        row = self._pinned_table.currentRow()
+        row = self._installed_table.currentRow()
         if row < 0:
             return
-        pin_id = self._pinned_table.item(row, 0).data(Qt.UserRole)
+        pin_id = self._installed_table.item(row, 0).data(Qt.UserRole)
         session = self._session()
         entry = session.get(PinnedApp, pin_id)
         if not entry:
@@ -428,7 +411,7 @@ class MainWindow(QMainWindow):
             return
         launch_app(command)
 
-    # ── Not-Installed tab ─────────────────────────────────────────────
+    # ── Not-Installed tab (未安装 - 收藏列表中未安装的) ──────────────
 
     def _build_notinstalled_tab(self) -> QWidget:
         w = QWidget()
@@ -437,7 +420,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
 
         self._ni_search = QLineEdit()
-        self._ni_search.setPlaceholderText("搜索待安装应用...")
+        self._ni_search.setPlaceholderText("搜索未安装的收藏应用...")
         self._ni_search.textChanged.connect(self._refresh_notinstalled)
         layout.addWidget(self._ni_search)
 
@@ -475,7 +458,7 @@ class MainWindow(QMainWindow):
         self._ni_table.setRowCount(len(apps))
         for i, a in enumerate(apps):
             icon_item = QTableWidgetItem()
-            icon_item.setIcon(get_resource_icon("file"))
+            icon_item.setIcon(get_resource_icon("document"))
             icon_item.setData(Qt.UserRole, a.id)
             self._ni_table.setItem(i, 0, icon_item)
 
@@ -632,8 +615,8 @@ class MainWindow(QMainWindow):
     # ── Helpers ───────────────────────────────────────────────────────
 
     def _refresh_all(self):
+        self._refresh_local()
         self._refresh_installed()
-        self._refresh_pinned()
         self._refresh_notinstalled()
         self._refresh_resources()
 
