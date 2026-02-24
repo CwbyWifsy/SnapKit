@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# test_file
+/bug_img/
+
+# Local workspace / assistant artifacts (non-project files)
+.claude/
+CLAUDE*.md
+temp/
+.idea/
+uv.lock

@@ -1,219 +1,101 @@
 # SnapKit
 
-Windows 个人工具箱 / 启动器。集中管理已安装应用、收藏常用程序、记录待安装软件和各类资源，支持一键启动和数据导出迁移。
+SnapKit 是一个面向 Windows 的个人工具箱，核心目标是把「本地应用启动 + 收藏管理 + 资源归档（图片/视频/文档/网站）」放到一个统一界面里，减少在系统菜单、文件管理器、浏览器收藏夹之间来回切换。
 
-## 环境要求
+## 适用场景
 
-- Windows 10 / 11
+- 想快速启动常用本地软件，并做收藏分组
+- 希望维护“已收藏但当前未安装”的软件清单
+- 需要统一管理本地与网络资源（图片、视频、文档、网站）
+- 希望用 Python 构建可维护、可扩展的桌面工具
+
+## 当前能力
+
+- 扫描已安装应用（Windows 注册表 / MSI / 可选 Appx）
+- 本地应用列表：启动、管理员启动、打开目录、卸载、重命名、收藏
+- 收藏视图：独立查看已收藏应用
+- 待安装视图：展示收藏中但当前未安装的软件
+- 资源管理：图片、视频、文档、网站统一卡片展示
+- 快速添加：
+  - 本地应用（exe/lnk/bat/cmd）
+  - 待安装软件
+  - 资源网站（URL）
+  - 文档/图片/视频资源（本地路径或网络 URL）
+- 图标能力：
+  - 本地应用可自定义图标（从 exe 提取）
+  - 网站资源自动尝试解析 favicon（失败回退字母图标）
+- 数据导出/导入（zip 包）
+- QML GUI + CLI 双入口
+
+## 技术栈
+
 - Python 3.10+
-- [uv](https://docs.astral.sh/uv/)（推荐）或 pip
+- SQLAlchemy 2.x
+- SQLite
+- Typer + Rich（CLI）
+- PySide6 + Qt Quick/QML（GUI）
 
-## 安装
+## 架构说明
 
-### 1. 安装 uv
+项目按分层组织，便于后续扩展和替换：
 
-打开 PowerShell，运行：
+- `core`：领域实体与仓储协议
+- `app`：用例与应用服务（业务编排）
+- `infra`：SQLAlchemy 仓储实现、外部适配
+- `interfaces`：CLI 与 QML 界面适配层
 
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
+这套结构适合你当前“功能迭代快 + UI 持续打磨”的阶段：业务逻辑集中在 `app/service`，界面可独立重构。
 
-安装完成后重新打开终端，确认：
-
-```powershell
-uv --version
-```
-
-### 2. 克隆项目
+## 安装与运行（Conda）
 
 ```powershell
-git clone <你的仓库地址> SnapKit
-cd SnapKit
+conda create -n snapkit python=3.11 -y
+conda activate snapkit
+pip install -e .
+pip install PySide6 pywin32
 ```
 
-### 3. 安装依赖
-
-仅 CLI（不含 GUI）：
+启动 GUI：
 
 ```powershell
-uv sync
+snapkit gui
 ```
 
-包含 GUI：
+常用 CLI：
 
 ```powershell
-uv sync --extra gui
+snapkit scan
+snapkit list-installed
+snapkit list-notinstalled
 ```
 
-安装开发/测试依赖：
+## 测试
 
 ```powershell
-uv sync --extra dev
+$env:PYTHONPATH='src'
+python -m pytest tests -q
 ```
 
-安装完成后 `snapkit` 命令即可在虚拟环境中使用。以下所有命令均通过 `uv run snapkit` 调用，或者你也可以先激活虚拟环境：
+## 目录结构
 
-```powershell
-.venv\Scripts\activate
-snapkit --help
+```text
+src/snapkit/
+  core/              # 实体与仓储协议
+  app/               # 用例、服务层
+  infra/             # 仓储实现、外部适配
+  interfaces/
+    gui_qml/         # QML 界面 + ViewModel + ListModel
+  cli.py             # CLI 命令入口
+  db.py              # 数据库初始化/会话
+  models.py          # ORM 模型
+  scanner.py         # Windows 软件扫描
+  launcher.py        # 启动逻辑
+  exporter.py        # 数据导入导出
 ```
 
-## 快速上手
+## 说明
 
-### 扫描已安装应用
+- 当前以 Windows 为主目标平台。
+- 扫描结果受系统注册表与安装器写入质量影响，个别软件需要手动补充。
+- 本项目处于持续迭代阶段，欢迎按你的工作流继续定制 UI 和操作逻辑。
 
-从 Windows 注册表扫描本机已安装的程序：
-
-```powershell
-uv run snapkit scan
-```
-
-如果想用模拟数据测试（非 Windows 环境或快速体验）：
-
-```powershell
-uv run snapkit scan --mock
-```
-
-### 查看已安装应用
-
-```powershell
-uv run snapkit list-installed
-```
-
-按标签筛选：
-
-```powershell
-uv run snapkit list-installed --tag dev
-```
-
-### 收藏（Pin）应用
-
-从 `list-installed` 输出中找到应用 ID，然后收藏：
-
-```powershell
-uv run snapkit pin 1
-```
-
-查看已收藏：
-
-```powershell
-uv run snapkit list-pinned
-```
-
-取消收藏（参数是 Pin ID，不是 App ID）：
-
-```powershell
-uv run snapkit unpin 1
-```
-
-### 启动应用
-
-SnapKit 会自动从安装目录推断可执行文件：
-
-```powershell
-uv run snapkit run 1
-```
-
-如果自动推断失败，手动指定启动命令：
-
-```powershell
-uv run snapkit set-launch 1 "C:\Program Files\Mozilla Firefox\firefox.exe"
-uv run snapkit run 1
-```
-
-### 记录待安装软件
-
-```powershell
-uv run snapkit add-notinstalled Blender --url https://www.blender.org/download/ --tags "3d,modeling"
-uv run snapkit list-notinstalled
-```
-
-### 管理资源
-
-添加文件、文件夹或 URL：
-
-```powershell
-uv run snapkit add-resource "工作笔记" "D:\notes\work.md" --type file --tags "笔记"
-uv run snapkit add-resource "项目文档" "https://docs.example.com" --type url
-uv run snapkit add-resource "素材库" "D:\assets" --type folder
-```
-
-查看和打开：
-
-```powershell
-uv run snapkit list-resources
-uv run snapkit open-resource 1
-```
-
-### 导出 / 导入
-
-导出所有数据到 zip 包（可用于备份或迁移到另一台电脑）：
-
-```powershell
-uv run snapkit export my_backup.zip
-```
-
-在新机器上导入：
-
-```powershell
-uv run snapkit import my_backup.zip --restore-to D:\restored_files
-```
-
-### 启动 GUI
-
-需要先安装 GUI 依赖（`uv sync --extra gui`）：
-
-```powershell
-uv run snapkit gui
-```
-
-GUI 提供四个标签页：已安装应用、已收藏应用、待安装软件、资源管理，每个标签页都有搜索框和操作按钮。
-
-## 命令一览
-
-| 命令 | 说明 |
-|------|------|
-| `scan [--mock]` | 扫描注册表（或模拟数据） |
-| `list-installed [--tag TAG]` | 列出已安装应用 |
-| `pin APP_ID` | 收藏应用 |
-| `unpin PIN_ID` | 取消收藏 |
-| `set-launch PIN_ID COMMAND` | 设置启动命令 |
-| `list-pinned` | 列出已收藏应用 |
-| `run PIN_ID` | 启动已收藏的应用 |
-| `add-notinstalled NAME [--url] [--desc] [--tags]` | 添加待安装软件 |
-| `list-notinstalled [--tag TAG]` | 列出待安装软件 |
-| `add-resource NAME PATH [--type] [--tags]` | 添加资源 |
-| `list-resources [--tag TAG]` | 列出资源 |
-| `open-resource RES_ID` | 打开资源 |
-| `export [OUTPUT]` | 导出数据为 zip |
-| `import ZIP_PATH [--restore-to DIR]` | 从 zip 导入数据 |
-| `gui` | 启动图形界面 |
-
-## 数据存储
-
-数据库文件位于 `%USERPROFILE%\.snapkit\snapkit.db`（SQLite），删除此文件即可重置所有数据。
-
-## 运行测试
-
-```powershell
-uv sync --extra dev
-uv run pytest tests/ -v
-```
-
-## 项目结构
-
-```
-SnapKit/
-├── pyproject.toml              # 项目配置、依赖、入口点
-├── src/snapkit/
-│   ├── __init__.py
-│   ├── db.py                   # 数据库引擎 / 会话
-│   ├── models.py               # ORM 模型（4张表）
-│   ├── scanner.py              # 注册表扫描 + mock 数据
-│   ├── launcher.py             # exe 推断 + 启动
-│   ├── exporter.py             # 导出 / 导入 zip
-│   ├── cli.py                  # 全部 CLI 命令
-│   └── gui/
-│       └── main_window.py      # PySide6 图形界面
-└── tests/                      # 测试用例
-```

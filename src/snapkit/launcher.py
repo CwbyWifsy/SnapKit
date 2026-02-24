@@ -1,4 +1,4 @@
-"""Application launcher – exe inference and subprocess launch."""
+﻿"""Application launcher - exe inference and subprocess launch."""
 
 import os
 import platform
@@ -7,41 +7,41 @@ from pathlib import Path
 
 
 def infer_exe(install_location: str, app_name: str = "") -> str | None:
-    """Best-effort inference of the main executable from an install directory.
+    """Best-effort inference of the main executable.
 
     Strategy:
-    1. Look for an exe whose stem matches (or contains) the app name.
-    2. Fall back to the first exe found in the directory root.
+    1. If install_location is already an .exe, use it.
+    2. Search exes in directory root.
+    3. Search exes recursively up to depth 2.
+    4. Prefer names matching app_name; fallback to shortest sensible path.
     """
     if not install_location:
         return None
 
     loc = Path(install_location)
+    if loc.is_file() and loc.suffix.lower() == ".exe":
+        return str(loc)
+
     if not loc.is_dir():
         return None
 
-    exes = list(loc.glob("*.exe"))
-    if not exes:
+    candidates = _collect_exes(loc)
+    if not candidates:
         return None
 
-    # Try to match app name
     if app_name:
-        name_lower = app_name.lower().replace(" ", "")
-        for exe in exes:
-            if name_lower in exe.stem.lower().replace(" ", ""):
+        app_tokens = _normalize(app_name)
+        for exe in candidates:
+            stem = _normalize(exe.stem)
+            if app_tokens and all(token in stem for token in app_tokens):
                 return str(exe)
 
-    # Fallback: first exe alphabetically
-    exes.sort(key=lambda p: p.name.lower())
-    return str(exes[0])
+    candidates.sort(key=lambda p: (p.name.lower(), len(str(p))))
+    return str(candidates[0])
 
 
 def launch_app(command: str) -> subprocess.Popen | None:
-    """Launch an application via *command*.
-
-    On Windows uses os.startfile for simple exe paths, otherwise subprocess.
-    Returns the Popen object (or None if startfile was used).
-    """
+    """Launch an application via *command*."""
     if platform.system() == "Windows" and not _has_args(command):
         os.startfile(command)  # type: ignore[attr-defined]
         return None
@@ -56,7 +56,6 @@ def launch_app(command: str) -> subprocess.Popen | None:
 
 def _has_args(command: str) -> bool:
     """Check if command string contains arguments beyond the executable."""
-    # Simple heuristic: if there's a space outside of quotes, there are args
     in_quote = False
     for ch in command:
         if ch == '"':
@@ -64,3 +63,19 @@ def _has_args(command: str) -> bool:
         elif ch == " " and not in_quote:
             return True
     return False
+
+
+def _collect_exes(root: Path, max_depth: int = 2) -> list[Path]:
+    exes = list(root.glob("*.exe"))
+
+    for path in root.rglob("*.exe"):
+        rel_depth = len(path.relative_to(root).parts) - 1
+        if rel_depth <= max_depth and path not in exes:
+            exes.append(path)
+
+    return exes
+
+
+def _normalize(name: str) -> list[str]:
+    cleaned = "".join(ch.lower() if ch.isalnum() else " " for ch in name)
+    return [token for token in cleaned.split() if token]

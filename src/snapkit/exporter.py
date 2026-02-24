@@ -124,7 +124,11 @@ def _dump_installed(session: Session) -> list[dict]:
     return [
         {
             "name": a.name,
+            "custom_name": a.custom_name,
+            "custom_icon_path": a.custom_icon_path,
             "publisher": a.publisher,
+            "display_icon": a.display_icon,
+            "uninstall_command": a.uninstall_command,
             "install_location": a.install_location,
             "version": a.version,
             "registry_key": a.registry_key,

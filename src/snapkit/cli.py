@@ -31,16 +31,38 @@ def _session():
 
 
 @app.command()
-def scan(mock: bool = typer.Option(False, "--mock", help="Use mock data instead of registry")):
+def scan(
+    mock: bool = typer.Option(False, "--mock", help="Use mock data instead of registry"),
+    all_items: bool = typer.Option(
+        False,
+        "--all",
+        help="Include system components/noisy entries (less strict filtering).",
+    ),
+    appx: bool = typer.Option(False, "--appx", help="Include Microsoft Store packages."),
+    prune: bool = typer.Option(True, "--prune/--no-prune", help="Prune stale scanned entries."),
+):
     """Scan Windows registry (or mock data) for installed apps."""
-    from snapkit.scanner import load_mock_data, save_scanned_apps, scan_registry
+    from snapkit.scanner import (
+        load_mock_data,
+        save_scanned_apps,
+        save_scanned_apps_and_prune,
+        scan_registry,
+    )
 
     session = _session()
-    apps = load_mock_data() if mock else scan_registry()
+    if mock:
+        apps = load_mock_data()
+    else:
+        apps = scan_registry(
+            actionable_only=not all_items,
+            include_system_components=all_items,
+            include_appx=appx,
+            include_msi=True,
+        )
     if not apps:
         console.print("[yellow]No apps found. Use --mock on non-Windows systems.[/yellow]")
         return
-    added = save_scanned_apps(session, apps)
+    added = save_scanned_apps(session, apps) if (mock or not prune) else save_scanned_apps_and_prune(session, apps)
     console.print(f"[green]Scan complete:[/green] {len(apps)} apps found, {added} new.")
 
 
@@ -354,14 +376,23 @@ def import_cmd(
 
 
 @app.command()
-def gui():
-    """Launch the SnapKit GUI (requires PySide6)."""
+def gui(
+    modern: bool = typer.Option(
+        False,
+        "--modern",
+        help="Deprecated. The QML GUI is now the default and only mode.",
+    )
+):
+    """Launch the SnapKit QML GUI (requires PySide6)."""
+    if modern:
+        console.print("[yellow]--modern is deprecated. Launching the default QML UI.[/yellow]")
+
     try:
-        from snapkit.gui.main_window import run_gui
+        from snapkit.interfaces.gui_qml.main import run_gui
     except ImportError:
         console.print(
-            "[red]PySide6 is not installed. Install with:[/red]\n"
-            "  uv pip install 'snapkit[gui]'"
+            "[red]PySide6 is not installed. Install in your conda env:[/red]\n"
+            "  conda run -n snapkit pip install PySide6"
         )
         raise typer.Exit(1)
 
